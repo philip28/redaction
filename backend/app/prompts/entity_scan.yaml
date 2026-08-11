@@ -1,0 +1,147 @@
+pid: entity_scan
+active: 1
+temperature: 0.0
+description: >-
+  Per-chunk confidential-data scan for Office documents. Layered so the schema and rules
+  are established before the document text arrives, and the execution trigger comes last:
+  with a long document in the middle of the context, instructions placed only at the top
+  lose the model's attention by the time it reaches the end.
+
+schema_contract: |-
+  [CRITICAL] OUTPUT SCHEMA — DO NOT DEVIATE
+  Output a valid JSON object only. No markdown, no explanation, no trailing text.
+  The first character is an opening brace and the last is a closing brace.
+
+  {
+    "entities": [
+      {
+        "text": "<the canonical spelling of the entity>",
+        "category": "<one of the allowed categories>",
+        "aliases": ["<every other spelling of this SAME entity found in the text>"]
+      }
+    ]
+  }
+
+  [CRITICAL] Format rules:
+  - ONE object per real-world entity. Never two objects for the same person or
+    organisation written differently.
+  - "text" is the fullest, most official spelling that appears in the document.
+  - "aliases" holds every OTHER spelling of that same entity that appears in the
+    document: shortened names, forms without quotation marks, initials, abbreviations,
+    transliterations. Empty array when there is only one spelling.
+  - Every value in "text" and in "aliases" must be copied from the document
+    character for character. Never invent a spelling that is not there.
+  - Nothing qualifies -> {"entities": []}.
+
+business_rules: |-
+  [CONFIDENTIAL DATA — WHAT TO RETURN]
+
+  [CRITICAL] One entity, one object:
+  - An organisation named with and without a legal form is ONE entity.
+    ПАО «МегаФон», ПАО "МегаФон", ПАО МегаФон and МегаФон are the SAME company,
+    written four ways. Return ONE object: "text" is the fullest spelling
+    (ПАО «МегаФон»), and the other three go in "aliases".
+  - A person named in full and by initials is ONE entity. Иванов Иван Иванович and
+    Иванов И.И. are the same person: full name in "text", initials in "aliases".
+  - Quotation marks, «», "", spacing and letter case NEVER make two entities.
+  - Different legal forms DO make different entities: ООО «Ромашка» and
+    ПАО «Ромашка» are two separate companies. Keep them as two objects.
+  - Two organisations sharing a first word are not the same: ПАО Сбербанк and
+    ООО «Сбербанк Страхование» are separate.
+
+  [CRITICAL] Canonical spelling:
+  - Prefer the form WITH the legal form and WITH quotation marks when the document
+    contains it, because that is the form a reader recognises as the official name.
+  - For people, prefer the full surname-name-patronymic form.
+  - Where an entity appears only in an inflected form, give the nominative in "text"
+    and leave the inflected form out — inflected matching is handled downstream.
+
+  [WHAT COUNTS]
+  - People: full names, initials, signatures, authors.
+  - Organisations: clients, counterparties, contractors, vendors, group companies.
+  - Contact and identity data: emails, phones, addresses, personal identifiers.
+  - Systems and internal project names when they identify the client.
+
+  [WHAT TO SKIP]
+  - Generic role words: клиент, аудитор, сотрудник, руководитель, the company.
+  - Job titles, document titles, standard headings, currencies, bare numbers.
+  - Well-known public bodies and vendors that carry no confidentiality risk
+    (ЦБ РФ, ФНС, Microsoft, Windows) unless they are a party to the engagement.
+  - Anything you are not sure actually appears in the text.
+
+  [ALLOWED CATEGORIES]
+  {categories}
+
+context_data: |-
+  [INPUT — READ AND INDEX INTERNALLY, DO NOT OUTPUT YET]
+  <document_text>
+  {document_text}
+  </document_text>
+
+  [ANCHOR] Document fragment loaded. Group the spellings you found by real-world entity.
+  Await the execution trigger.
+
+examples: |-
+  [EXAMPLE ONLY] ILLUSTRATIVE — ADAPT TO INPUT, DO NOT COPY VERBATIM.
+
+  Example fragment:
+    Договор заключен между ПАО «МегаФон» и ООО «Ромашка». Со стороны ПАО МегаФон
+    подписал Иванов Иван Иванович. Иванов И.И. также согласовал приложение.
+    Контактный адрес: i.ivanov@megafon.ru. Ответственный от ПАО «Ромашка» — Петров П.П.
+
+  Correct output:
+
+  {
+    "entities": [
+      {
+        "text": "ПАО «МегаФон»",
+        "category": "ORG",
+        "aliases": ["ПАО МегаФон"]
+      },
+      {
+        "text": "ООО «Ромашка»",
+        "category": "ORG",
+        "aliases": []
+      },
+      {
+        "text": "ПАО «Ромашка»",
+        "category": "ORG",
+        "aliases": []
+      },
+      {
+        "text": "Иванов Иван Иванович",
+        "category": "PERSON",
+        "aliases": ["Иванов И.И."]
+      },
+      {
+        "text": "Петров П.П.",
+        "category": "PERSON",
+        "aliases": []
+      },
+      {
+        "text": "i.ivanov@megafon.ru",
+        "category": "EMAIL",
+        "aliases": []
+      }
+    ]
+  }
+
+  [NOTE] ПАО «МегаФон» and ПАО МегаФон became ONE object with an alias — the quotation
+  marks do not make a second company. ООО «Ромашка» and ПАО «Ромашка» stayed SEPARATE —
+  the legal form differs, so they are different entities. Иванов И.И. is an alias of the
+  full name, while Петров П.П. appears only in short form and is its own entity.
+
+task: |-
+  [CRITICAL] EXECUTE NOW. Before output, INTERNALLY VERIFY:
+  1. Grouping: no two objects describe the same real-world person or organisation.
+     Re-read your list — if two entries differ only by quotation marks, spacing, case,
+     a missing legal form or initials, merge them into one object with aliases.
+  2. Separation: entries that differ by legal form, or that are genuinely different
+     organisations, remain separate.
+  3. Canonical form: each "text" is the fullest spelling that actually appears.
+  4. Grounding: every "text" and every alias is copied from the fragment above,
+     character for character. Nothing invented.
+  5. Exclusions: no generic role words, job titles, headings, currencies or bare numbers.
+  6. Output ONLY the JSON object — nothing before it and nothing after it. It opens and
+     closes with a curly brace.
+  If any check fails, regenerate internally. Output ONLY the final JSON object.
