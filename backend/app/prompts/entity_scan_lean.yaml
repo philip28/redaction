@@ -1,0 +1,54 @@
+pid: entity_scan_lean
+active: 1
+temperature: 0.0
+description: >-
+  Short variant of entity_scan for reasoning models that spend their whole token budget
+  deliberating. Same layers and same output contract, about a third of the length, and
+  written so that nothing asks the model to reflect, verify or re-read. The full template
+  tells it to check six things before answering; a reasoning model does that out loud.
+  Here the constraints are stated once as rules and never revisited.
+
+schema_contract: |-
+  Output one JSON object and nothing else. First character {, last character }.
+
+  {"entities": [{"text": "...", "category": "...", "aliases": ["...", "..."]}]}
+
+  - "text": the fullest spelling of the entity as written in the document.
+  - "aliases": every other spelling of that SAME entity in the document. [] if none.
+  - Copy all spellings from the document exactly. Invent nothing.
+  - Nothing found -> {"entities": []}
+
+business_rules: |-
+  Return people, organisations, contacts and identifiers that could identify a client.
+
+  One object per real entity:
+  - ПАО «МегаФон», ПАО "МегаФон", ПАО МегаФон, МегаФон = ONE company. Fullest spelling in
+    "text", the rest in "aliases". Quotes, spacing and case never split an entity.
+  - Иванов Иван Иванович and Иванов И.И. = ONE person. Full name in "text".
+  - Different legal form = different company: ООО «Ромашка» and ПАО «Ромашка» stay apart.
+  - Give names in the nominative case.
+
+  Skip: role words (клиент, аудитор, сотрудник), job titles, headings, currencies, bare
+  numbers, and public bodies with no confidentiality risk (ЦБ РФ, ФНС, Microsoft).
+
+  Categories: {categories}
+
+context_data: |-
+  <document_text>
+  {document_text}
+  </document_text>
+
+examples: |-
+  Fragment: Договор между ПАО «МегаФон» и ООО «Ромашка». От ПАО МегаФон — Иванов Иван
+  Иванович. Иванов И.И. согласовал приложение. Ответственный: Петров П.П.
+
+  Output:
+  {"entities": [
+    {"text": "ПАО «МегаФон»", "category": "ORG", "aliases": ["ПАО МегаФон"]},
+    {"text": "ООО «Ромашка»", "category": "ORG", "aliases": []},
+    {"text": "Иванов Иван Иванович", "category": "PERSON", "aliases": ["Иванов И.И."]},
+    {"text": "Петров П.П.", "category": "PERSON", "aliases": []}
+  ]}
+
+task: |-
+  Output the JSON object now. No reasoning, no commentary, no preamble. Start with {.
