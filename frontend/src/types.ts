@@ -28,6 +28,19 @@ export interface EntityInfo {
   tag: string | null;
 }
 
+export interface JobProgress {
+  stage: "queued" | "reading" | "scanning" | "matching" | "done";
+  document: string | null;
+  documents_done: number;
+  documents_total: number;
+  chunks_done: number;
+  chunks_total: number;
+  elapsed_seconds: number;
+  /** Seconds since the last observable change — a slow job differs from a stalled one. */
+  stalled_seconds: number;
+  eta_seconds: number | null;
+}
+
 export interface Job {
   id: string;
   kind: "anonymize" | "deanonymize";
@@ -38,6 +51,8 @@ export interface Job {
   warnings: string[];
   error: string | null;
   unmapped_tags: string[];
+  /** Absent when talking to a backend older than the progress feature. */
+  progress?: JobProgress;
 }
 
 export interface ServerConfig {

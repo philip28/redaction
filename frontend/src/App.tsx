@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, setNetworkMessenger } from "./api";
 import { LANGS, useI18n } from "./i18n";
 import type { Lang } from "./i18n";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Anonymize } from "./pages/Anonymize";
 import { Deanonymize } from "./pages/Deanonymize";
 import type { ServerConfig } from "./types";
@@ -76,7 +77,13 @@ export default function App() {
       )}
 
       <main style={{ marginTop: 24 }}>
-        {mode === "anonymize" ? <Anonymize config={config} /> : <Deanonymize />}
+        <ErrorBoundary
+          key={mode}
+          fallbackTitle={t("error.render")}
+          retryLabel={t("error.retry")}
+        >
+          {mode === "anonymize" ? <Anonymize config={config} /> : <Deanonymize />}
+        </ErrorBoundary>
       </main>
     </div>
   );

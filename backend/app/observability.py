@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 import uuid
+from collections import defaultdict
 from contextvars import ContextVar
 
 from starlette.requests import Request
@@ -26,6 +28,7 @@ from starlette.types import ASGIApp
 
 log = logging.getLogger("redactor.access")
 loop_log = logging.getLogger("redactor.loop")
+progress_log = logging.getLogger("redactor.progress")
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 
@@ -33,9 +36,19 @@ request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 class RequestLogMiddleware:
     """Pure ASGI middleware - it does not buffer response bodies, so downloads stream."""
 
+    #: Endpoints the browser polls on a timer. At one call every 1.5s per open tab these
+    #: swamp the log and hide everything worth reading, so they are logged only when they
+    #: are slow, when they fail, or once every POLL_SAMPLE calls.
+    POLL_PATTERNS = (re.compile(r"^/api/anonymize/jobs/[0-9a-f]+$"), re.compile(r"^/health$"))
+    POLL_SAMPLE = 20
+
     def __init__(self, app: ASGIApp, slow_ms: int = 2000) -> None:
         self.app = app
         self.slow_ms = slow_ms
+        self._poll_counts: dict[str, int] = defaultdict(int)
+
+    def _is_poll(self, method: str, path: str) -> bool:
+        return method == "GET" and any(p.match(path) for p in self.POLL_PATTERNS)
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] != "http":
@@ -78,18 +91,30 @@ class RequestLogMiddleware:
             request_id_var.reset(token)
 
         elapsed = (time.perf_counter() - started) * 1000
-        level = logging.WARNING if elapsed >= self.slow_ms else logging.INFO
+        path = request.url.path
+        slow = elapsed >= self.slow_ms
+
+        if slow or status >= 400:
+            # Always worth seeing, whatever the level.
+            level = logging.WARNING
+            suffix = "  [SLOW]" if slow else ""
+        elif self._is_poll(request.method, path):
+            # Sampled: one line per POLL_SAMPLE calls, so a tail still shows the browser
+            # is alive without a line every 1.5 seconds.
+            self._poll_counts[path] += 1
+            n = self._poll_counts[path]
+            if n % self.POLL_SAMPLE:
+                return
+            level = logging.DEBUG
+            suffix = f"  [poll x{n}]"
+        else:
+            level = logging.DEBUG
+            suffix = ""
+
         log.log(
             level,
             "req=%s %s %s -> %s in %.0fms client=%s bytes=%s%s",
-            rid,
-            request.method,
-            request.url.path,
-            status,
-            elapsed,
-            client,
-            size,
-            "  [SLOW]" if elapsed >= self.slow_ms else "",
+            rid, request.method, path, status, elapsed, client, size, suffix,
         )
 
 
@@ -112,19 +137,119 @@ async def loop_lag_monitor(threshold_ms: int, interval: float = 0.5) -> None:
             )
 
 
+#: Third-party loggers that are noisy at their own default levels and say nothing we do
+#: not already log ourselves. httpx in particular logs a line for every outbound call,
+#: duplicating the llm[...] lines; python_multipart logs each part of every upload.
+NOISY_LOGGERS = {
+    "uvicorn.access": logging.WARNING,
+    "httpx": logging.WARNING,
+    "httpcore": logging.WARNING,
+    "python_multipart": logging.WARNING,
+    "multipart": logging.WARNING,
+    "asyncio": logging.WARNING,
+    "watchfiles": logging.WARNING,
+}
+
+
 def configure_logging(level: str) -> None:
+    """Configure levels so INFO reads as a job narrative and DEBUG adds the detail.
+
+    At INFO: job progress, LLM calls, slow or failed requests.
+    At DEBUG: every request, prompt layers, raw model replies, per-document stats.
+    Third-party libraries are pinned to WARNING either way - their DEBUG output is
+    voluminous and would bury exactly what someone turned DEBUG on to read.
+    """
+    resolved = getattr(logging, level.upper(), logging.INFO)
     logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
+        level=resolved,
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
         force=True,
     )
-    # Uvicorn logs the same requests in less detail; ours supersede them.
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    for name, floor in NOISY_LOGGERS.items():
+        logging.getLogger(name).setLevel(floor)
 
 
 __all__ = [
+    "Progress",
     "RequestLogMiddleware",
     "loop_lag_monitor",
     "configure_logging",
     "request_id_var",
 ]
+
+
+class Progress:
+    """Tracks a long job and logs a heartbeat, so a slow scan can be told from a stuck one.
+
+    A scan can run for minutes with nothing in the log between "started" and "finished".
+    That is precisely when someone asks whether it has hung. This emits a line at each
+    step and, independently, a heartbeat while a step is still running - so silence in
+    the log means the process is wedged, not merely busy.
+    """
+
+    def __init__(self, label: str, total: int, heartbeat_s: float = 15.0) -> None:
+        self.label = label
+        self.total = max(total, 0)
+        self.done = 0
+        self.heartbeat_s = heartbeat_s
+        self.started = time.perf_counter()
+        self._step_started = self.started
+        self._current = "starting"
+        self._task: asyncio.Task | None = None
+
+    @property
+    def elapsed(self) -> float:
+        return time.perf_counter() - self.started
+
+    def _eta(self) -> str:
+        if not self.done or not self.total:
+            return "eta unknown"
+        per_item = self.elapsed / self.done
+        remaining = per_item * (self.total - self.done)
+        return f"eta ~{remaining:.0f}s"
+
+    def step(self, description: str) -> None:
+        """Mark the start of a named step."""
+        self._current = description
+        self._step_started = time.perf_counter()
+        progress_log.info(
+            "%s: %s [%d/%d done, %.0fs elapsed, %s]",
+            self.label, description, self.done, self.total, self.elapsed, self._eta(),
+        )
+
+    def complete(self, description: str = "") -> None:
+        """Mark one unit of work finished."""
+        self.done += 1
+        took = time.perf_counter() - self._step_started
+        progress_log.info(
+            "%s: %d/%d done%s (took %.1fs, %.0fs elapsed, %s)",
+            self.label, self.done, self.total,
+            f" - {description}" if description else "",
+            took, self.elapsed, self._eta(),
+        )
+
+    async def _beat(self) -> None:
+        while True:
+            await asyncio.sleep(self.heartbeat_s)
+            progress_log.info(
+                "%s: still working on %r - %d/%d done, %.0fs elapsed",
+                self.label, self._current, self.done, self.total, self.elapsed,
+            )
+
+    async def __aenter__(self) -> "Progress":
+        progress_log.info("%s: started, %d item(s)", self.label, self.total)
+        self._task = asyncio.create_task(self._beat())
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        if self._task:
+            self._task.cancel()
+        if exc_type:
+            progress_log.error(
+                "%s: FAILED after %.1fs at %r (%d/%d done): %s",
+                self.label, self.elapsed, self._current, self.done, self.total, exc,
+            )
+        else:
+            progress_log.info(
+                "%s: finished %d/%d in %.1fs", self.label, self.done, self.total, self.elapsed,
+            )

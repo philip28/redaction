@@ -42,6 +42,59 @@ class Document:
 
 
 @dataclass
+class JobProgress:
+    """Live state of a running scan, polled by the browser.
+
+    Stages are codes rather than sentences: the frontend renders them in the interface
+    language, which may differ from the language the job was started in.
+    """
+
+    stage: str = "queued"  # queued | reading | scanning | matching | done
+    document: str | None = None
+    documents_done: int = 0
+    documents_total: int = 0
+    chunks_done: int = 0
+    chunks_total: int = 0
+    started_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+    #: When the current stage began. The ETA is measured from here: chunk counts reset
+    #: per document, so dividing whole-job elapsed by them overstates the remainder
+    #: badly at every document boundary.
+    stage_started_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict:
+        elapsed = max(time.time() - self.started_at, 0.0)
+        return {
+            "stage": self.stage,
+            "document": self.document,
+            "documents_done": self.documents_done,
+            "documents_total": self.documents_total,
+            "chunks_done": self.chunks_done,
+            "chunks_total": self.chunks_total,
+            "elapsed_seconds": round(elapsed, 1),
+            # Time since the last observable change. The browser uses this to tell a slow
+            # job from a stalled one, which a percentage alone cannot express.
+            "stalled_seconds": round(max(time.time() - self.updated_at, 0.0), 1),
+            "eta_seconds": self._eta(max(time.time() - self.stage_started_at, 0.0)),
+        }
+
+    def _eta(self, stage_elapsed: float) -> float | None:
+        """Seconds remaining for the current stage, from chunks when scanning.
+
+        Chunks are the finer measure and the slow part; documents alone jump from 0% to
+        50% on a two-file job and say nothing in between.
+        """
+        done, total = (
+            (self.chunks_done, self.chunks_total)
+            if self.chunks_total
+            else (self.documents_done, self.documents_total)
+        )
+        if not done or not total or done >= total:
+            return None
+        return round(stage_elapsed / done * (total - done), 1)
+
+
+@dataclass
 class Job:
     id: str
     client_id: str
@@ -57,6 +110,7 @@ class Job:
     warnings: list[str] = field(default_factory=list)
     error: str | None = None
     unmapped_tags: list[str] = field(default_factory=list)
+    progress: JobProgress = field(default_factory=JobProgress)
 
     def touch(self, status: str | None = None) -> None:
         if status:
@@ -80,6 +134,7 @@ class Job:
             "warnings": self.warnings,
             "error": self.error,
             "unmapped_tags": self.unmapped_tags,
+            "progress": self.progress.to_dict(),
         }
 
 

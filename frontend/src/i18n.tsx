@@ -34,6 +34,20 @@ const ru = {
   "upload.scan": "Анализировать документы",
   "upload.scanning": "Загрузка…",
 
+  "scan.stage.queued": "Подготовка",
+  "scan.stage.reading": "Чтение документа",
+  "scan.stage.scanning": "Поиск данных",
+  "scan.stage.matching": "Сопоставление найденного",
+  "scan.stage.done": "Завершение",
+  "scan.chunks": "фрагмент {done} из {total}",
+  "scan.docs": "документ {done} из {total}",
+  "scan.eta": "осталось примерно {time}",
+  "scan.elapsed": "прошло {time}",
+  "scan.stalledWarning":
+    "Ответа от модели нет уже {time}. Задание не прервано — большие фрагменты обрабатываются долго. Подробности в журнале сервера.",
+  "scan.sec": "{n} сек",
+  "scan.min": "{n} мин",
+  "scan.minSec": "{m} мин {s} сек",
   "scan.working":
     "Читаю документы ({count}) и ищу имена, организации и идентификаторы.",
 
@@ -101,6 +115,8 @@ const ru = {
   "restore.again": "Восстановить ещё файлы",
 
   "error.startOver": "Начать заново",
+  "error.render": "Не удалось отобразить этот блок",
+  "error.retry": "Показать снова",
   "error.serverDown":
     "Сервер не отвечает (за {ms} мс). Проверьте, что бэкенд запущен, и повторите — файлы задания на сервере сохранены.",
   "error.dropped":
@@ -137,6 +153,20 @@ const en: Record<keyof typeof ru, string> = {
   "upload.scan": "Scan documents",
   "upload.scanning": "Uploading…",
 
+  "scan.stage.queued": "Preparing",
+  "scan.stage.reading": "Reading document",
+  "scan.stage.scanning": "Looking for sensitive data",
+  "scan.stage.matching": "Matching findings",
+  "scan.stage.done": "Finishing",
+  "scan.chunks": "fragment {done} of {total}",
+  "scan.docs": "document {done} of {total}",
+  "scan.eta": "about {time} left",
+  "scan.elapsed": "{time} elapsed",
+  "scan.stalledWarning":
+    "No response from the model for {time}. The job has not been cancelled — large fragments take a while. See the server log for detail.",
+  "scan.sec": "{n} sec",
+  "scan.min": "{n} min",
+  "scan.minSec": "{m} min {s} sec",
   "scan.working":
     "Reading {count} document(s) and looking for names, organisations and identifiers.",
 
@@ -205,6 +235,8 @@ const en: Record<keyof typeof ru, string> = {
   "restore.again": "Restore more files",
 
   "error.startOver": "Start over",
+  "error.render": "This part of the page could not be shown",
+  "error.retry": "Try showing it again",
   "error.serverDown":
     "The server is not responding (after {ms} ms). Check that the backend is running and try again — the job's files are still on the server.",
   "error.dropped":

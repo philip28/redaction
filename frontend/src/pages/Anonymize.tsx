@@ -3,6 +3,7 @@ import { api, download, paths } from "../api";
 import { useI18n } from "../i18n";
 import { FileDrop, formatSize } from "../components/FileDrop";
 import { EntityLedger } from "../components/EntityLedger";
+import { ScanProgress } from "../components/ScanProgress";
 import type { EntityPatch, Job, ServerConfig } from "../types";
 
 const ACCEPT = ".docx,.docm,.xlsx,.xlsm,.pptx,.pptm";
@@ -162,7 +163,7 @@ export function Anonymize({ config }: { config: ServerConfig | null }) {
       {/* ------------------------------------------------ scanning */}
       {job && (job.status === "analyzing" || job.status === "pending") && (
         <div className="panel">
-          <div className="working">{t("scan.working", { count: job.documents.length })}</div>
+          <ScanProgress progress={job.progress} documentCount={job.documents.length} />
         </div>
       )}
 

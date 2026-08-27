@@ -681,3 +681,86 @@ a:focus-visible,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------- scan progress
+   A long scan needs to prove it is alive. The bar is weighted by chunks rather than
+   documents so it keeps moving through a single large file, and the stage line names
+   what is happening rather than showing a bare percentage. */
+
+.progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-stage {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.progress-percent {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.progress-doc {
+  margin-top: 3px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-track {
+  position: relative;
+  height: 4px;
+  margin: 12px 0 10px;
+  background: var(--rule-soft);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--seal);
+  transition: width 420ms cubic-bezier(0.32, 0.72, 0.24, 1);
+}
+
+/* A candy-stripe crawl over the filled part: even when the percentage holds steady
+   between chunks, the surface keeps moving, which is the point. */
+.progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    115deg,
+    transparent 0 10px,
+    rgba(247, 247, 244, 0.28) 10px 20px
+  );
+  animation: crawl 1.4s linear infinite;
+}
+
+@keyframes crawl {
+  to {
+    transform: translateX(-23px);
+  }
+}
+
+.progress-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.progress-stall {
+  margin-top: 12px;
+  padding: 9px 12px;
+  border-left: 2px solid var(--flag);
+  background: #f6efee;
+  color: #4a2b28;
+  font-size: 12.5px;
+}

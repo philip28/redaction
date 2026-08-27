@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     llm_max_retries: int = 2
     llm_json_mode: bool = False  # set true only if the endpoint supports response_format
     llm_extra_headers: str = "{}"  # raw JSON, e.g. {"X-Tenant":"audit"}
+    #: Raw JSON merged into the request body. The place to switch off a reasoning model's
+    #: thinking mode, which no prompt wording can reliably do:
+    #:   Qwen3 on vLLM/SGLang: {"chat_template_kwargs": {"enable_thinking": false}}
+    #: Also takes sampling knobs the OpenAI schema lacks, e.g. {"top_k": 20}.
+    llm_extra_body: str = "{}"
+    #: Which layered template in app/prompts/ to use. "entity_scan_lean" is a shorter
+    #: variant for models that over-think the full one.
+    llm_prompt_template: str = "entity_scan"
 
     # --- Detection
     entity_categories: str = "PERSON,ORG,LOCATION,EMAIL,PHONE,URL,ID_NUMBER,ACCOUNT,SYSTEM,OTHER"
@@ -65,7 +73,10 @@ class Settings(BaseSettings):
     prompt_dir: str = ""
 
     # --- diagnostics
+    #: INFO shows job progress and LLM calls. DEBUG adds every request, the prompt
+    #: layers and raw model replies. Set VERBOSE=true as a shorthand for DEBUG.
     log_level: str = "INFO"
+    verbose: bool = False
     #: Requests slower than this are logged as SLOW - the ones a proxy or browser may abandon.
     slow_request_ms: int = 2000
     #: Warn when the event loop is blocked this long. 0 disables the monitor.
@@ -74,6 +85,10 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # --- derived helpers -------------------------------------------------
+    @property
+    def effective_log_level(self) -> str:
+        return "DEBUG" if self.verbose else self.log_level.upper()
+
     @property
     def categories(self) -> list[str]:
         return _csv(self.entity_categories)
@@ -89,6 +104,14 @@ class Settings(BaseSettings):
     @property
     def origins(self) -> list[str]:
         return _csv(self.cors_origins)
+
+    @property
+    def extra_body(self) -> dict:
+        try:
+            parsed = json.loads(self.llm_extra_body or "{}")
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, AttributeError):
+            return {}
 
     @property
     def extra_headers(self) -> dict[str, str]:

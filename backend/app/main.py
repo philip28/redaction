@@ -12,7 +12,7 @@ from .observability import RequestLogMiddleware, configure_logging, loop_lag_mon
 from .store import JobStore
 
 settings = get_settings()
-configure_logging(settings.log_level)
+configure_logging(settings.effective_log_level)
 log = logging.getLogger(__name__)
 
 store = JobStore(settings)
@@ -38,6 +38,12 @@ async def lifespan(app: FastAPI):
         settings.llm_base_url if settings.llm_configured else "not configured",
         settings.llm_model if settings.llm_configured else "-",
         settings.default_language,
+    )
+    log.info(
+        "logging at %s%s - set VERBOSE=true for per-request lines, prompt layers and raw "
+        "model replies",
+        settings.effective_log_level,
+        " (verbose)" if settings.verbose else "",
     )
     tasks = [asyncio.create_task(_sweeper())]
     if settings.loop_lag_warn_ms > 0:

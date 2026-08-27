@@ -6,3 +6,15 @@ node_modules/
 dist/
 data/
 .env
+/.idea/.gitignore
+/.idea/misc.xml
+/.idea/modules.xml
+/backend/app/pipeline.py
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/redaction.iml
+/backend/requirements.txt
+/requirements.txt
+/backend/requirements-dev.txt
+/backend/test_engine.py
+/.idea/vcs.xml

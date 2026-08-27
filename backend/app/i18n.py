@@ -133,9 +133,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "ru": "неожиданная структура ответа модели: {body}",
         "en": "unexpected response shape from the model endpoint: {body}",
     },
+    "llm_failed": {
+        "en": "the model call failed: {error}",
+        "ru": "запрос к модели не выполнен: {error}",
+    },
     "llm_no_json": {
-        "ru": "модель вернула ответ без JSON",
-        "en": "model did not return JSON",
+        "ru": (
+            "модель рассуждала вслух и не вернула JSON — вероятно, ответ обрезан по лимиту "
+            "токенов; уменьшите LLM_MAX_CHUNK_CHARS или увеличьте LLM_MAX_TOKENS"
+        ),
+        "en": (
+            "the model reasoned in prose and returned no JSON - the reply was probably cut "
+            "off by the token limit; lower LLM_MAX_CHUNK_CHARS or raise LLM_MAX_TOKENS"
+        ),
     },
     "llm_unclosed_think": {
         "ru": "блок рассуждений модели не был закрыт — ответ обрезан; увеличьте "
