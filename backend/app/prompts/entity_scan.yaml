@@ -35,6 +35,43 @@ schema_contract: |-
 
 business_rules: |-
   [CONFIDENTIAL DATA — WHAT TO RETURN]
+  
+  [CRITICAL] The proper-name test — apply to EVERY candidate before anything else.
+  A candidate qualifies only if BOTH answers are YES:
+  1. Is it a proper name — a name given to ONE specific person, organisation, system,
+     project or place — rather than a word that describes a kind of thing, a function
+     or a role?
+  2. Is it specific to this document's parties — would it be absent or different if the
+     same sentence appeared in another company's document?
+  Any NO -> skip it. Most words in a regulation, policy or methodology are generic
+  vocabulary. A fragment of definitions or abbreviations often contains no entities.
+ 
+  [CRITICAL] Definitions and abbreviations sections ("Термины и определения", "Сокращения"):
+  - These sections define vocabulary. An entry qualifies only if the term itself passes
+    the proper-name test.
+  - Expanding an abbreviation does NOT make it an entity:
+    "АБС – автоматизированная банковская система" is generic; skip both forms.
+  - Being capitalised, abbreviated or formally defined does NOT make a term an entity.
+ 
+  [CRITICAL] One entity, one object:
+  - An organisation named with and without a legal form is ONE entity.
+    ПАО «МегаФон», ПАО "МегаФон", ПАО МегаФон and МегаФон are the SAME company,
+    written four ways. Return ONE object: "text" is the fullest spelling
+    (ПАО «МегаФон»), and the other three go in "aliases".
+  - A person named in full and by initials is ONE entity. Иванов Иван Иванович and
+    Иванов И.И. are the same person: full name in "text", initials in "aliases".
+  - Quotation marks, «», "", spacing and letter case NEVER make two entities.
+  - Different legal forms DO make different entities: ООО «Ромашка» and
+    ПАО «Ромашка» are two separate companies. Keep them as two objects.
+  - Two organisations sharing a first word are not the same: ПАО Сбербанк and
+    ООО «Сбербанк Страхование» are separate.
+ 
+  [CRITICAL] Canonical spelling:
+  - Prefer the form WITH the legal form and WITH quotation marks when the document
+    contains it, because that is the form a reader recognises as the official name.
+  - For people, prefer the full surname-name-patronymic form.
+  - Where an entity appears only in an inflected form, give the nominative in "text"
+    and leave the inflected form out — inflected matching is handled downstream.
 
   [CRITICAL] One entity, one object:
   - An organisation named with and without a legal form is ONE entity.
@@ -55,22 +92,46 @@ business_rules: |-
   - For people, prefer the full surname-name-patronymic form.
   - Where an entity appears only in an inflected form, give the nominative in "text"
     and leave the inflected form out — inflected matching is handled downstream.
-
-  [WHAT COUNTS]
+  
+  [WHAT COUNTS] — only candidates that pass the proper-name test
   - People: full names, initials, signatures, authors.
-  - Organisations: clients, counterparties, contractors, vendors, group companies.
-  - Contact and identity data: emails, phones, addresses, personal identifiers.
-  - Systems and internal project names when they identify the client.
-
-  [WHAT TO SKIP]
+  - Organisations: clients, counterparties, contractors, vendors, group companies —
+    identified by their own name, usually with a legal form or in quotation marks.
+  - Contact and identity data: emails, phones, addresses, personal identifiers,
+    account numbers.
+  - Systems, products and projects with their OWN name — a brand, a code name, or a
+    name in quotation marks: АС «Орион», платформа «Атлас», проект «Горизонт».
+ 
+  [WHAT TO SKIP] — even when capitalised, abbreviated or defined in the document
+  - Generic vocabulary and its abbreviations: ИТ, ПО, АРМ, АБС, ДБО, ЦОД, ФЛ, ЮЛ, НТ,
+    together with their expansions.
+  - Industry-standard terms and frameworks: CMDB, ITSM, ITIL, SLA, DRP, BCP, their
+    expansions, and descriptions such as "ITSM-система".
+  - Systems named only by their function: ИС Аварии, ИС Конфигурации, система
+    мониторинга. Registry or inventory numbers next to them are bare numbers.
+  - Organisational units named only by their function, with or without an
+    abbreviation: Департамент информационной безопасности, Отдел тестовых сред,
+    Ситуационный центр, ССП ИТ, головная организация, дополнительный офис.
+  - Roles, job titles and process roles: Координатор Аварии, Менеджер процесса,
+    Руководитель дежурной смены, Специалист, Куратор.
+  - Defined process terms, even when capitalised: Авария, Сервис, Цепочка сервисов,
+    Точка мониторинга, Продукт, Клиент.
   - Generic role words: клиент, аудитор, сотрудник, руководитель, the company.
-  - Job titles, document titles, standard headings, currencies, bare numbers.
-  - Well-known public bodies and vendors that carry no confidentiality risk
-    (ЦБ РФ, ФНС, Microsoft, Windows) unless they are a party to the engagement.
+  - Document titles, standard headings, references to regulations and orders,
+    currencies, dates, bare numbers.
+  - Public bodies, regulators and their units, and well-known vendors that carry no
+    confidentiality risk (ЦБ РФ, Банк России, ФинЦЕРТ, ФНС, Microsoft, Windows) unless
+    they are a party to the engagement.
   - Anything you are not sure actually appears in the text.
+ 
+  [CRITICAL] Resolving doubt:
+  - Unsure whether a term is generic vocabulary -> include it.
+  - Unsure whether a proper name is confidential -> include it.
 
   [ALLOWED CATEGORIES]
   {categories}
+  - OTHER is only for confidential identifiers that fit no other category, such as a
+  contract number or a project code name. Never use it for generic vocabulary.
 
 context_data: |-
   [INPUT — READ AND INDEX INTERNALLY, DO NOT OUTPUT YET]
@@ -78,7 +139,9 @@ context_data: |-
   {document_text}
   </document_text>
 
-  [ANCHOR] Document fragment loaded. Group the spellings you found by real-world entity.
+  [ANCHOR] Document fragment loaded. Apply the proper-name test: generic vocabulary,
+  abbreviations, roles, and units or systems named only by their function are not
+  entities. Group the spellings that remain by real-world entity.
   Await the execution trigger.
 
 examples: |-
@@ -133,15 +196,20 @@ examples: |-
 
 task: |-
   [CRITICAL] EXECUTE NOW. Before output, INTERNALLY VERIFY:
-  1. Grouping: no two objects describe the same real-world person or organisation.
+  1. Proper-name test: every entry is a proper name specific to this document's
+     parties. Drop generic vocabulary and its abbreviations, glossary expansions,
+     defined process terms, roles and job titles, units and systems named only by
+     their function, public bodies, headings, currencies, bare numbers, and [[...]]
+     placeholders. A short or empty list is a correct result for a glossary fragment.
+  2. Grouping: no two objects describe the same real-world person or organisation.
      Re-read your list — if two entries differ only by quotation marks, spacing, case,
      a missing legal form or initials, merge them into one object with aliases.
-  2. Separation: entries that differ by legal form, or that are genuinely different
+  3. Separation: entries that differ by legal form, or that are genuinely different
      organisations, remain separate.
-  3. Canonical form: each "text" is the fullest spelling that actually appears.
-  4. Grounding: every "text" and every alias is copied from the fragment above,
+  4. Canonical form: each "text" is the fullest spelling that actually appears.
+  5. Grounding: every "text" and every alias is copied from the fragment above,
      character for character. Nothing invented.
-  5. Exclusions: no generic role words, job titles, headings, currencies or bare numbers.
-  6. Output ONLY the JSON object — nothing before it and nothing after it. It opens and
+  6. Category: OTHER holds only confidential identifiers, never vocabulary.
+  7. Output ONLY the JSON object — nothing before it and nothing after it. It opens and
      closes with a curly brace.
   If any check fails, regenerate internally. Output ONLY the final JSON object.

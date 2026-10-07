@@ -216,7 +216,7 @@ class LLMClient:
                     f" (attempt {attempt + 1})" if attempt else "",
                 )
                 if log.isEnabledFor(logging.DEBUG):
-                    log.debug("llm[%s] raw reply: %s", tag, _preview(content, 600))
+                    log.debug("llm[%s] raw reply: %s", tag, _preview(content, 5000))
                 elif not content.strip():
                     log.warning("llm[%s] reply was empty after %.1fs", tag, took)
                 return content
